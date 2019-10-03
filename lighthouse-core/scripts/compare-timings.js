@@ -183,7 +183,6 @@ function filter(results) {
   for (const result of results) {
     for (const key in result) {
       if (reportExcludeRegex.test(key)) delete result[key];
-      delete result[key];
     }
   }
 }
@@ -261,7 +260,7 @@ function compare() {
     if (!exists(aValue)) return 1;
     else if (!exists(bValue)) return -1;
 
-    return (argv.desc ? -1 : 1) * (aValue - bValue);
+    return (argv.desc ? 1 : -1) * (Math.abs(aValue) - Math.abs(bValue));
   });
   filter(results);
   print(results);
