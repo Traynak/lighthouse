@@ -182,7 +182,7 @@ function filter(results) {
 
   for (const result of results) {
     for (const key in result) {
-      if (!reportExcludeRegex.test(key)) continue;
+      if (reportExcludeRegex.test(key)) delete result[key];
       delete result[key];
     }
   }
