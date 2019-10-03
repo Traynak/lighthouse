@@ -199,14 +199,7 @@ function exists(value) {
 function summarize() {
   const results = aggregateResults(argv.name);
   filter(results);
-
-  if (argv.output === 'table') {
-    // eslint-disable-next-line no-console
-    console.table(results);
-  } else if (argv.output === 'json') {
-    // eslint-disable-next-line no-console
-    console.log(JSON.stringify(results, null, 2));
-  }
+  render(results);
 }
 
 /**
@@ -271,7 +264,13 @@ function compare() {
     return (argv.desc ? -1 : 1) * (aValue - bValue);
   });
   filter(results);
+  render(results);
+}
 
+/**
+ * @param {*[]} results
+ */
+function render(results) {
   if (argv.output === 'table') {
     // eslint-disable-next-line no-console
     console.table(results);
