@@ -22,7 +22,7 @@ const argv = yargs
   .describe({
     // common flags
     'name': 'Unique identifier, makes the folder for storing LHRs. Not a path',
-    'report-exclude': 'Regex of properties to exclude. Set to none to disable default',
+    'report-exclude': 'Regex of properties to exclude. Set to "none" to disable default',
     // --collect
     'collect': 'Saves LHRs to disk',
     'lh-flags': 'Lighthouse flags',
