@@ -199,7 +199,7 @@ function exists(value) {
 function summarize() {
   const results = aggregateResults(argv.name);
   filter(results);
-  render(results);
+  print(results);
 }
 
 /**
@@ -264,13 +264,13 @@ function compare() {
     return (argv.desc ? -1 : 1) * (aValue - bValue);
   });
   filter(results);
-  render(results);
+  print(results);
 }
 
 /**
  * @param {*[]} results
  */
-function render(results) {
+function print(results) {
   if (argv.output === 'table') {
     // eslint-disable-next-line no-console
     console.table(results);
