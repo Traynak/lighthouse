@@ -468,18 +468,66 @@ describe('Main Thread Tasks', () => {
     ]);
   });
 
+  it('should handle child events that extend >1ms beyond parent event because missing E', () => {
+    /*
+    An artistic rendering of the below trace:
+    ████████████████TaskA██████████████████
+            █████████TaskB██████████████████
+    */
+    const traceEvents = [
+      ...boilerplateTrace,
+      {ph: 'B', name: 'TaskA', pid, tid, ts: baseTs, args},
+      {ph: 'B', name: 'TaskB', pid, tid, ts: baseTs + 25e3, args},
+      {ph: 'E', name: 'TaskA', pid, tid, ts: baseTs + 100e3, args},
+      {ph: 'I', name: 'MarkerToPushOutTraceEnd', pid, tid, ts: baseTs + 110e3, args},
+    ];
+
+    traceEvents.forEach(evt => Object.assign(evt, {cat: 'devtools.timeline'}));
+
+    const tasks = run({traceEvents});
+    const [taskA, taskB] = tasks;
+    expect(tasks).toEqual([
+      {
+        parent: undefined,
+        attributableURLs: [],
+
+        children: [taskB],
+        event: traceEvents.find(event => event.name === 'TaskA'),
+        startTime: 0,
+        endTime: 100,
+        duration: 100,
+        selfTime: 25,
+        group: taskGroups.other,
+      },
+      {
+        parent: taskA,
+        attributableURLs: [],
+
+        children: [],
+        event: traceEvents.find(event => event.name === 'TaskB' && event.ph === 'B'),
+        startTime: 25,
+        endTime: 100,
+        duration: 75,
+        selfTime: 75,
+        group: taskGroups.other,
+      },
+    ]);
+  });
+
   const invalidEventSets = [
     [
       // TaskA overlaps with TaskB, X first
       {ph: 'X', name: 'TaskA', pid, tid, ts: baseTs, dur: 100e3, args},
       {ph: 'B', name: 'TaskB', pid, tid, ts: baseTs + 5e3, args},
       {ph: 'E', name: 'TaskB', pid, tid, ts: baseTs + 115e3, args},
+      {ph: 'I', name: 'MarkerToPushOutTraceEnd', pid, tid, ts: baseTs + 200e3, args},
     ],
     [
       // TaskA overlaps with TaskB, B first
       {ph: 'B', name: 'TaskA', pid, tid, ts: baseTs, args},
       {ph: 'X', name: 'TaskB', pid, tid, ts: baseTs + 5e3, dur: 100e3, args},
       {ph: 'E', name: 'TaskA', pid, tid, ts: baseTs + 90e3, args},
+      {ph: 'I', name: 'MarkerToPushOutTraceEnd', pid, tid, ts: baseTs + 200e3, args},
     ],
     [
       // TaskA overlaps with TaskB, both B/E
@@ -487,6 +535,7 @@ describe('Main Thread Tasks', () => {
       {ph: 'B', name: 'TaskB', pid, tid, ts: baseTs + 5e3, args},
       {ph: 'E', name: 'TaskA', pid, tid, ts: baseTs + 90e3, args},
       {ph: 'E', name: 'TaskB', pid, tid, ts: baseTs + 95e3, args},
+      {ph: 'I', name: 'MarkerToPushOutTraceEnd', pid, tid, ts: baseTs + 200e3, args},
     ],
     [
       // TaskA is missing a B event
@@ -498,12 +547,7 @@ describe('Main Thread Tasks', () => {
       // TaskB is missing a B event after an X
       {ph: 'X', name: 'TaskA', pid, tid, ts: baseTs, dur: 100e3, args},
       {ph: 'E', name: 'TaskB', pid, tid, ts: baseTs + 10e3, args},
-    ],
-    [
-      {ph: 'I', name: 'MarkerToPushOutTraceEnd', pid, tid, ts: baseTs + 110e3, args},
-      // TaskB is missing an E event within an X
-      {ph: 'X', name: 'TaskA', pid, tid, ts: baseTs, dur: 100e3, args},
-      {ph: 'B', name: 'TaskB', pid, tid, ts: baseTs + 10e3, args},
+      {ph: 'I', name: 'MarkerToPushOutTraceEnd', pid, tid, ts: baseTs + 200e3, args},
     ],
   ];
 

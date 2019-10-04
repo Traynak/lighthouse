@@ -39,7 +39,7 @@ const {taskGroups, taskNameToGroup} = require('./task-groups.js');
  * @prop {TaskGroup} group
  */
 
-/** @typedef {{timers: Map<string, TaskNode>}} PriorTaskData */
+/** @typedef {{timers: Map<string, TaskNode>, traceEndTs: number}} PriorTaskData */
 
 class MainThreadTasks {
   /**
@@ -248,17 +248,25 @@ class MainThreadTasks {
           const timeDelta = nextTask.endTime - currentTask.endTime;
           // The child task is taking longer than the parent task, which should be impossible.
           //    If it's less than 1ms, we'll let it slide by increasing the duration of the parent.
-          //    If it's more, throw an error.
+          //    If it's ending at traceEndTs, it means we were missing the end event. We'll truncate it to the parent.
+          //    Otherwise, throw an error.
           if (timeDelta < 1000) {
             currentTask.endTime = nextTask.endTime;
             currentTask.duration += timeDelta;
+          } else if (nextTask.endTime === priorTaskData.traceEndTs) {
+            nextTask.endTime = currentTask.endTime;
+            nextTask.duration = nextTask.endTime - nextTask.startTime;
           } else {
-            // If we fell into this error, it's usually because of one of three reasons.
-            //    - We were missing an E event for a child task and we assumed the child ended at the end of the trace.
+            // If we fell into this error, it's usually because of one of two reasons.
             //    - There was slop in the opposite direction (child started 1ms before parent) and the child was assumed to be parent instead.
             //    - The child timestamp ended more than 1ms after tha parent.
             // These have more complicated fixes, so handling separately https://github.com/GoogleChrome/lighthouse/pull/9491#discussion_r327331204.
-            throw new Error('Fatal trace logic error - child cannot end after parent');
+            /** @type {any} */
+            const error = new Error('Fatal trace logic error - child cannot end after parent');
+            error.timeDelta = timeDelta;
+            error.nextTask = nextTask;
+            error.currentTask = currentTask;
+            throw error;
           }
         }
 
@@ -421,7 +429,7 @@ class MainThreadTasks {
    */
   static getMainThreadTasks(mainThreadEvents, traceEndTs) {
     const timers = new Map();
-    const priorTaskData = {timers};
+    const priorTaskData = {timers, traceEndTs};
     const tasks = MainThreadTasks._createTasksFromEvents(
       mainThreadEvents,
       priorTaskData,
