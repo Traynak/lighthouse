@@ -34,12 +34,12 @@ const argv = yargs
     'output': 'table, json',
     // --compare
     'compare': 'Compare two sets of LHRs',
-    'delta-sort': 'Property to sort by its delta',
+    'delta-property-sort': 'Property to sort by its delta',
     'desc': 'Set to override default ascending sort',
   })
   .string('measure-filter')
-  .default('report-exclude', 'min|max|^n$')
-  .default('delta-sort', 'mean')
+  .default('report-exclude', 'min|max|stdev|^n$')
+  .default('delta-property-sort', 'mean')
   .default('output', 'table')
   .array('urls')
   .string('lh-flags')
@@ -249,7 +249,7 @@ function compare() {
     };
   });
 
-  const sortByKey = `${argv.deltaSort} Δ`;
+  const sortByKey = `${argv.deltaPropertySort} Δ`;
   results.sort((a, b) => {
     // @ts-ignore - shhh tsc.
     const aValue = a[sortByKey];
