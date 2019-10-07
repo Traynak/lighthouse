@@ -12,8 +12,6 @@ const http = require('http');
 const zlib = require('zlib');
 const path = require('path');
 const fs = require('fs');
-const glob = require('glob');
-const mime = require('mime-types');
 const parseQueryString = require('querystring').parse;
 const parseURL = require('url').parse;
 const URLSearchParams = require('url').URLSearchParams;
@@ -27,38 +25,29 @@ function requestHandler(request, response) {
   const queryString = requestUrl.search && parseQueryString(requestUrl.search.slice(1));
   let absoluteFilePath = path.join(__dirname, filePath);
 
-  // Create an index page that lists the available test pages.
-  if (filePath === '/') {
-    const fixturePaths = glob.sync('**/*.html', {cwd: __dirname});
-    const html = `
-      <html>
-      <h1>Smoke test fixtures</h1>
-      ${fixturePaths.map(p => `<a href=${encodeURI(p)}>${escape(p)}</a>`).join('<br>')}
-    `;
-    response.writeHead(200, {
-      'Content-Security-Policy': `default-src 'none';`,
-    });
-    sendResponse(200, html);
-    return;
-  }
-
   if (filePath.startsWith('/dist/viewer')) {
     // Rewrite lighthouse-viewer paths to point to that location.
     absoluteFilePath = path.join(__dirname, '/../../../', filePath);
   }
 
-  // Disallow file requests outside of LH folder
-  const filePathDir = path.parse(absoluteFilePath).dir;
-  if (!filePathDir.startsWith(lhRootDirPath)) {
-    return readFileCallback(new Error('Disallowed path'));
+  if (filePath === '/zone.js') {
+    // evaluateAsync previously had a bug that LH would fail if a page polyfilled Promise.
+    // We bring in an aggressive Promise polyfill (zone) to ensure we don't still fail.
+    const zonePath = '../../../node_modules/zone.js';
+    absoluteFilePath = path.join(__dirname, `${zonePath}/dist/zone.js`);
+  } else {
+    // Otherwise, disallow file requests outside of LH folder
+    const filePathDir = path.parse(absoluteFilePath).dir;
+    if (!filePathDir.startsWith(lhRootDirPath)) {
+      return readFileCallback(new Error('Disallowed path'));
+    }
   }
 
-  // Check if the file exists, then read it and serve it.
   fs.exists(absoluteFilePath, fsExistsCallback);
 
   function fsExistsCallback(fileExists) {
     if (!fileExists) {
-      return sendResponse(404, `404 - File not found. ${filePath}`);
+      return sendResponse(404, `404 - File not found. ${absoluteFilePath}`);
     }
     fs.readFile(absoluteFilePath, 'binary', readFileCallback);
   }
@@ -74,13 +63,23 @@ function requestHandler(request, response) {
   function sendResponse(statusCode, data) {
     const headers = {'Access-Control-Allow-Origin': '*'};
 
-    const contentType = mime.lookup(filePath);
-    const charset = mime.lookup(contentType);
-    // `mime.contentType` appends the correct charset too.
-    // Note: it seems to miss just one case, svg. Doesn't matter much, we'll just allow
-    // svgs to fallback to binary encoding. `Content-Type: image/svg+xml` is sufficient for our use case.
-    // see https://github.com/jshttp/mime-types/issues/66
-    if (contentType) headers['Content-Type'] = mime.contentType(contentType);
+    if (filePath.endsWith('.js')) {
+      headers['Content-Type'] = 'text/javascript';
+    } else if (filePath.endsWith('.css')) {
+      headers['Content-Type'] = 'text/css';
+    } else if (filePath.endsWith('.svg')) {
+      headers['Content-Type'] = 'image/svg+xml';
+    } else if (filePath.endsWith('.png')) {
+      headers['Content-Type'] = 'image/png';
+    } else if (filePath.endsWith('.gif')) {
+      headers['Content-Type'] = 'image/gif';
+    } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      headers['Content-Type'] = 'image/jpeg';
+    } else if (filePath.endsWith('.webp')) {
+      headers['Content-Type'] = 'image/webp';
+    } else if (filePath.endsWith('.json')) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     let delay = 0;
     let useGzip = false;
@@ -106,6 +105,20 @@ function requestHandler(request, response) {
         }
       }
 
+      if (params.has('extra_cookie')) {
+        const extraCookies = new URLSearchParams(params.get('extra_cookie'));
+        let cookeString = '';
+        for (const [cookieName, cookieValue] of extraCookies) {
+          cookeString += cookieName + '=' + cookieValue + ';';
+        }
+
+        // Extra cookie we allways override possible 'Set-Cookie' header
+        // which may be already present in request by extra_header
+        headers['Set-Cookie'] = [];
+        headers['Set-Cookie'].push(cookeString);
+      }
+
+
       if (params.has('gzip')) {
         useGzip = Boolean(params.get('gzip'));
       }
@@ -128,8 +141,7 @@ function requestHandler(request, response) {
       return setTimeout(finishResponse, delay, data);
     }
 
-    const encoding = charset === 'UTF-8' ? 'utf-8' : 'binary';
-    finishResponse(data, encoding);
+    finishResponse(data);
   }
 
   function sendRedirect(url) {
@@ -140,8 +152,8 @@ function requestHandler(request, response) {
     response.end();
   }
 
-  function finishResponse(data, encoding) {
-    response.write(data, encoding);
+  function finishResponse(data) {
+    response.write(data, 'binary');
     response.end();
   }
 }
@@ -152,15 +164,12 @@ const serverForOffline = http.createServer(requestHandler);
 serverForOnline.on('error', e => console.error(e.code, e));
 serverForOffline.on('error', e => console.error(e.code, e));
 
+
 // If called via `node static-server.js` then start listening, otherwise, just expose the servers
 if (require.main === module) {
   // Start listening
-  const onlinePort = 10200;
-  const offlinePort = 10503;
-  serverForOnline.listen(onlinePort, 'localhost');
-  serverForOffline.listen(offlinePort, 'localhost');
-  console.log(`online:  listening on http://localhost:${onlinePort}`);
-  console.log(`offline: listening on http://localhost:${offlinePort}`);
+  serverForOnline.listen(10200, 'localhost');
+  serverForOffline.listen(10503, 'localhost');
 } else {
   module.exports = {
     server: serverForOnline,
