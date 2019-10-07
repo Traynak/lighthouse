@@ -10,7 +10,8 @@ class CookieSearchable extends Gatherer {
     //await this.sendCommand('Network.getResponseBody', {requestId});
     //const r_getcookies = await this.sendCommand('Network.getCookies');
     //const r_getAllCookies = await this.sendCommand('Network.getAllCookies');
-    return driver.sendCommand('Network.getAllCookies')
+    //return driver.sendCommand('Network.getAllCookies')
+    return driver.sendCommand('Network.getCookies')
       .then(loadMetrics => {
         if (!loadMetrics || loadMetrics === undefined) {
           throw new Error('Unable to find load metrics in page');
